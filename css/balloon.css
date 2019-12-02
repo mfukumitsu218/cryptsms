@@ -1,0 +1,47 @@
+/* https://blog.codecamp.jp/css_balloon */
+/* 吹き出し本体 */
+.line {
+  display: block;
+}
+
+.balloon-me{
+  position: relative;
+  display: inline-block;
+  padding: 20px;
+  background-color: #99CCFF;
+}
+
+.balloon-partner{
+  position: relative;
+  display: inline-block;
+  padding: 20px;
+  background-color: rgb(223, 220, 220);
+}
+
+/* アイコンを右に表示 */
+.balloon-me::before{
+  content: '';
+  position: absolute;
+  display: block;
+  width: 0;
+  height: 0;
+  right: -15px;
+  top: 20px;
+  border-left: 15px solid #99CCFF;
+  border-top: 15px solid transparent;
+  border-bottom: 15px solid transparent;
+}
+
+/* アイコンを左に表示 */
+.balloon-partner::before{
+  content: '';
+  position: absolute;
+  display: inline-block;
+  width: 0;
+  height: 0;
+  left: -15px;
+  top: 20px;
+  border-right: 15px solid rgb(223, 220, 220);
+  border-top: 15px solid transparent;
+  border-bottom: 15px solid transparent;
+}

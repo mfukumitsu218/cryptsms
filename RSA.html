@@ -1,0 +1,295 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+	<title>Cryptter</title>
+	<meta http-equiv="Content-Type" content="text/html charset=utf-8" />
+
+    <!-- Required meta tags -->
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+    <!-- Bootstrap CSS -->
+	<link href="./css/bootstrap.min.css" rel="stylesheet">
+	<link href="./css/balloon.css" rel="stylesheet">
+ 
+    <!-- style.css -->
+	<!-- <link rel="stylesheet" href="css/style.css"> -->
+	<script type="text/javascript" src="./js/RSA.js"></script>
+	<script type="text/javascript" src="./js/code.js"></script>
+	<script type="text/javascript" src="./js/key.js"></script>
+	<script type="text/javascript" src="./js/msg.js"></script>
+	<script type="text/javascript">
+	const LineType = {
+		plain : 1,
+		cipher: 2,
+		send_key: 3,
+		recv_key: 4
+	};
+
+	const chat = [
+		{"mycomment": false, "type": LineType.plain, "body": "こんにちは"},
+		{"mycomment": false, "type": LineType.plain, "body": "あなたの暗号化鍵を教えてください。"},
+		{"mycomment": false, "type": LineType.recv_key, "body": `ちなみに、私のものは「${partner_pk}」です。`}
+	];
+
+	const loadChat = () => {
+		let body = "";
+		for(const line of chat) {
+			const sender_class = (line["mycomment"])? "balloon-me" : "balloon-partner";
+			const pos_class = (line["mycomment"])? "text-right" : "text-left";
+			const onclick_func = (!line["mycomment"] && line["type"] == LineType.cipher)? `targetLine('${line['body']}')` : "";
+
+			body +=
+			`<div class="line ${pos_class}">
+				<div class="${sender_class} h3" onclick="${onclick_func}">
+					${line["body"]}
+				</div>
+			</div>`;
+		}
+		document.getElementById("sms_body").innerHTML = body;
+	};
+
+	const genKey = () => {
+		const pk_list = Object.keys(key_list);
+		const pk = randList(pk_list);
+		const sk = key_list[pk];
+
+		document.getElementById("cand_pk").innerText = pk;
+		document.getElementById("cand_sk").innerText = sk;
+	};
+
+
+	let myPk;
+	let mySk;
+	const distKey = () => {
+		myPk = BigInt(document.getElementById("cand_pk").innerText);
+		mySk = BigInt(document.getElementById("cand_sk").innerText);
+		chat.push({"mycomment": true, "type": LineType.send_key, "body": `私の暗号化鍵は「${myPk}」です。`});
+		document.getElementById("decKey").value = mySk;
+		loadChat();
+	};
+
+	const recvCipher = () => {
+		const msgs = randList(sampleMsg);
+		const cipherList = [];
+		for(const msg of msgs) {
+			const code = str2code(msg);
+			const c = PMod(BigInt(code), myPk, n);
+			cipherList.push(c);
+		}
+		chat.push({"mycomment": false, "type": LineType.cipher, "body": `暗号文<br>${cipherList.join("<br>")}`});
+		loadChat();
+	};
+
+	const targetLine = (cipher) => {
+		const cipherList = cipher.split("<br>").slice(1);
+		document.getElementById("targetCipher").value = cipherList.join("\n");
+		let codeList = [];
+		let plainList = [];
+		for(const cipher of cipherList) {
+			const code = PMod(BigInt(cipher), mySk, n);
+			const plain = code2str(code.toString());
+			codeList.push(code);
+			plainList.push(plain);
+		}
+		document.getElementById("decrypted").value = codeList.join("\n");
+		document.getElementById("decorded").innerHTML = plainList.join("<br>");
+		document.getElementById("decorded").style = "visibility: visible;";
+	};
+
+	const offDisability = (id, tipsTitle = null) => { 
+		document.getElementById(id).disabled = "";
+		if (tipsTitle != null) {
+			$(`#${id}`).tooltip("hide").attr("data-original-title", tipsTitle).tooltip("show");
+		}
+	};
+
+	const reloadToCodeTitle = () => {
+		if (!document.getElementById("plain").validity.valid) {
+			return;
+		}
+		const plain = document.getElementById("plain").value;
+		offDisability("toCode", `「${plain}」を数値化します.`);
+	};
+
+	const plain2code = () => {
+		if (!document.getElementById("plain").validity.valid || document.getElementById("plain").value == "") { return; }
+		$('#toCode').tooltip('hide');
+		const plain = document.getElementById("plain").value;
+		const code = str2code(plain);
+		if (gcd(BigInt(code), n) != 1) {
+			alert("別なことばを入力してください.");
+		}
+		document.getElementById("code").value = code;
+		offDisability("enc", `${code}<sup>${partner_pk}</sup>を${n}で割った余りをもとめます.`);
+	};
+
+	const encrypt = () => {
+		if (!document.getElementById("plain").validity.valid) { return; }
+		$("#enc").tooltip("hide");
+		const m = BigInt(document.getElementById("code").value);
+		if (gcd(m, n) != 1) { return; }
+		document.getElementById("cipher").value = PMod(m, partner_pk, n);
+		offDisability("sendCipherBtn", `暗号文を投稿します`);
+	};	
+
+	let sentCipher;
+	const sendCipher = () => {
+		$('#sendCipherBtn').tooltip("hide");
+		sentCipher = BigInt(document.getElementById("cipher").value);
+		chat.push({"mycomment": true, "type": LineType.cipher, "body": `暗号文<br>${sentCipher}`});
+		loadChat();
+	};
+
+	const partnerDecCheck = () => {
+		const msg = PMod(BigInt(sentCipher), partner_sk, n);
+		const code = code2str(msg.toString());
+		chat.push({"mycomment": false, "type": LineType.plain, "body": `あなたからの暗号文読めました！<br>「${code}」<br>ですね!`});
+		loadChat();
+	};
+	</script>
+</head>
+<body onload="loadChat()">
+<nav class="navbar navbar-light bg-light">
+	<a class="navbar-brand" href="#">Alice</a>
+</nav>
+<div class="container">
+	<div class="card">
+		<div class="card-body" id="sms_body"></div>
+	</div>
+	<ul class="nav nav-pills nav-fill" id="actionTab" role="tablist">
+		<li class="nav-item">
+			<a class="nav-link active" id="genKey-tab" data-toggle="tab" href="#genKey" role="tab" aria-controls="genKey" aria-selected="true">鍵を作る</a>
+		</li>
+		<li class="nav-item">
+			<a class="nav-link" id="decrypt-tab" data-toggle="tab" href="#decrypt" role="tab" aria-controls="decrypt" aria-selected="false">暗号文を読む</a>
+		</li>
+		<li class="nav-item">
+			<a class="nav-link" id="encrypt-tab" data-toggle="tab" href="#encrypt" role="tab" aria-controls="encrypt" aria-selected="false">暗号文を送る</a>
+		</li>
+	</ul>
+	<div class="tab-content" id="actionTabContent">
+		<div class="tab-pane fade show active" id="genKey" role="tabpanel" aria-labelledby="genKey-tab">
+			<div class="card card-body">
+				<div class="form-group">
+					<button class="btn btn-primary" type="submit" onclick="genKey()">鍵を生成</button>
+				</div>
+				<div class="row">
+					<div class="col-sm-6">
+						<div class="card">
+							<div class="card-body">
+								<h5 class="card-title">暗号化鍵</h5>
+								<p class="card-text h3" id="cand_pk"></p>
+								<a href="#" class="btn btn-primary" onclick="distKey();recvCipher();">鍵を配布する</a>
+							</div>
+						</div>
+					</div>
+					<div class="col-sm-6">
+						<div class="card">
+							<div class="card-body">
+								<h5 class="card-title">復号鍵</h5>
+								<p class="card-text h3" id="cand_sk"></p>
+							</div>
+						</div>
+					</div>
+				</div>
+			</div>
+		</div>
+		<div class="tab-pane fade" id="decrypt" role="tabpanel" aria-labelledby="decrypt-tab">
+			<div class="card card-body">
+				<div class="input-group mb-3">
+					<div class="input-group-prepend">
+						<span class="input-group-text" id="inputGroup-sizing-default">秘密鍵</span>
+					</div>
+					<input type="text" class="form-control" id="decKey" aria-label="Sizing example input" aria-describedby="inputGroup-sizing-default">
+				</div>
+				<div class="row">
+					<div class="col-sm-4 card card-body">
+						<h5 class="card-title">選ばれた暗号文</h5>
+						<textarea readonly class="form-control-plaintext h4" id="targetCipher" placeholder="暗号文を選んでね"></textarea>
+					</div>
+					<div class="col-sm-4 card card-body">
+						<h5 class="card-title">ひみつの数字</h5>			
+						<textarea readonly class="form-control-plaintext h4" id="decrypted"></textarea>
+					</div>
+					<div class="col-sm-4 card card-body">
+						<h5 class="card-title">Aliceからのメッセージ</h5>
+						<div class="balloon-partner h5" id="decorded" style="visibility: hidden;"></div>
+					</div>
+				</div>				
+			</div>
+		</div>
+		<div class="tab-pane fade" id="encrypt" role="tabpanel" aria-labelledby="encrypt-tab">
+			<form id="input_form" class="card card-body" onsubmit="return false">
+				<div class="form-group row">
+					<input type="text" class="col-sm-10 .form-control-lg text-xl-left h4" id="plain" placeholder="ひらがなでヒミツのつぶやきを書いてね" pattern="[\u3041-\u3096\u30FC]{1,7}" title="ひらがな7文字以内で入力してください." oninput="reloadToCodeTitle()">
+					<label class="col-sm-2" for="plain">※ひらがな7文字以内</label>
+				</div>
+		
+				<div class="row">
+					<div class="col-sm-4 card card-body">
+						<h5 class="card-title">数値化</h5>
+						<button class="btn btn-primary control-label .form-control-sm" id="toCode" onclick="plain2code()" data-toggle="tooltip" data-placement="bottom" data-html="true" title="まずはつぶやきましょう" disabled>数字に変換</button>
+						<input type="text" readonly class="form-control-plaintext h4" id="code" placeholder="ひみつの数値" style="text-align: center">
+					</div>
+					<div class="col-sm-4 card card-body">
+						<h5 class="card-title">暗号化</h5>			
+						<button class="btn btn-primary control-label .form-control-lg" id="enc" onclick="encrypt()" data-toggle="tooltip" data-placement="bottom" data-html="true" title="まずはつぶやき・数値化しましょう" disabled>ひみつの数値を暗号化</button>
+						<input type="text" readonly class="form-control-plaintext h4" id="cipher" placeholder="暗号文" style="text-align: center">
+					</div>
+					<div class="col-sm-4 card card-body">
+						<h5 class="card-title">送信</h5>
+						<button class="btn btn-primary .float-sm-right" id="sendCipherBtn" onclick="sendCipher(); partnerDecCheck()" data-toggle="tooltip" data-placement="bottom" data-html="true" title="まずはつぶやき・数値化しましょう" disabled>暗号文をつぶやく</button>
+					</div>
+				</div>
+			</form>
+		</div>
+	</div>
+
+
+
+
+
+
+
+
+
+
+	<!-- <form class="card card-body" onsubmit="return false">
+		<div class="form-group row">
+			<input type="text" class="col-sm-6 .form-control-lg" id="user_name" placeholder="ユーザ名" pattern="^[0-9A-Za-z]+$" required title="半角英数字で入力してください.">
+			<input type="password" class="col-sm-4 .form-control-lg" id="dec_key" placeholder="秘密鍵" pattern="^[0-9]+$" title="配られたカードに書いている数字を「半角」で入力してください." required>
+			<button class="col-sm-2 btn btn-primary .float-sm-right" onclick="start()">利用開始</button>
+		</div>
+	</form>
+	<div id="crypeetBody" class="list-group" style="visibility: hidden"></div> -->
+
+	<!-- Modal -->
+	<!-- <div class="modal fade" id="decryptModalCenter" tabindex="-1" role="dialog" aria-labelledby="decryptModalCenterTitle" aria-hidden="true">
+		<div class="modal-dialog modal-dialog-centered" role="document">
+		<div class="modal-content">
+			<div class="modal-header">
+			<h5 class="modal-title" id="decryptModalCenterTitle"></h5>
+			<button type="button" class="close" data-dismiss="modal" aria-label="Close">
+				<span aria-hidden="true">&times;</span>
+			</button>
+			</div>
+			<div class="modal-body" id="decryptedMsg"></div>
+			<div class="modal-footer">
+			<button type="button" class="btn btn-secondary" data-dismiss="modal">Close</button>
+			</div>
+		</div>
+		</div>
+	</div> -->
+</div>
+<!-- Optional JavaScript -->
+<script src="./js/jquery-3.4.1.slim.min.js"></script>
+<!-- jQuery first, then Popper.js, then Bootstrap JS -->
+<script src="./js/popper.min.js"></script>
+<script src="./js/bootstrap.bundle.min.js"></script>
+<!-- <script>
+	$('[data-toggle="tooltip"]').tooltip();
+	const reloadInterval = 30000;
+	setInterval(getCrypeetList, reloadInterval);
+</script> -->
+</body>
+</html>
